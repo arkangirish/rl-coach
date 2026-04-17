@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RL Coach — Rocket League AI Coaching</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --orange: #FF6B2B;
+      --orange-dim: #cc4a0e;
+      --orange-glow: rgba(255, 107, 43, 0.15);
+      --bg: #0a0b0f;
+      --surface: #13151c;
+      --surface2: #1c1f2a;
+      --border: rgba(255,255,255,0.07);
+      --border-orange: rgba(255,107,43,0.35);
+      --text: #f0f0f0;
+      --text-muted: #7a7f94;
+      --blue-accent: #4a9eff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      position: sticky;
+      top: 0;
+      background: rgba(10,11,15,0.92);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+
+    .logo {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+
+    .logo span { color: var(--orange); }
+
+    .api-badge {
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border-orange);
+      color: var(--orange);
+      background: var(--orange-glow);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .api-badge:hover { background: rgba(255,107,43,0.25); }
+    .api-badge.connected { border-color: rgba(74,200,120,0.4); color: #4ac878; background: rgba(74,200,120,0.1); }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 4rem 2rem 3rem;
+      position: relative;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 300px;
+      background: radial-gradient(ellipse, rgba(255,107,43,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-tag {
+      display: inline-block;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--orange);
+      border: 1px solid var(--border-orange);
+      padding: 4px 14px;
+      border-radius: 999px;
+      margin-bottom: 1.2rem;
+    }
+
+    h1 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: clamp(38px, 7vw, 68px);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -1px;
+      margin-bottom: 1rem;
+    }
+
+    h1 em {
+      font-style: normal;
+      color: var(--orange);
+    }
+
+    .hero-sub {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 480px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Main layout ── */
+    .main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem;
+    }
+
+    /* ── API Key setup ── */
+    .api-setup {
+      background: var(--surface);
+      border: 1px solid var(--border-orange);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      display: none;
+    }
+
+    .api-setup.visible { display: block; }
+
+    .api-setup h3 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--orange);
+    }
+
+    .api-setup p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .api-setup a { color: var(--blue-accent); }
+
+    .api-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .api-row input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: var(--text);
+      font-family: 'Barlow', sans-serif;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .api-row input:focus { border-color: var(--orange); }
+
+    .btn-save-key {
+      padding: 10px 20px;
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Barlow', sans-serif;
+      white-space: nowrap;
+      transition: opacity 0.2s;
+    }
+
+    .btn-save-key:hover { opacity: 0.85; }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 20px;
+      padding: 3.5rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      background: var(--surface);
+      position: relative;
+      margin-bottom: 2rem;
+    }
+
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--orange);
+      background: var(--orange-glow);
+    }
+
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      font-size: 24px;
+    }
+
+    .upload-zone h3 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .upload-zone p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .upload-zone .file-types {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .file-type-tag {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    /* ── Video player ── */
+    .video-section {
+      display: none;
+      margin-bottom: 2rem;
+    }
+
+    .video-section.visible { display: block; }
+
+    .video-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .video-header h3 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .btn-change {
+      font-size: 13px;
+      color: var(--text-muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-family: 'Barlow', sans-serif;
+      transition: all 0.2s;
+    }
+
+    .btn-change:hover { border-color: var(--orange); color: var(--orange); }
+
+    video {
+      width: 100%;
+      border-radius: 14px;
+      background: #000;
+      border: 1px solid var(--border);
+      display: block;
+    }
+
+    .video-filename {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    /* ── Analyze button ── */
+    .analyze-wrap {
+      display: none;
+      margin-bottom: 2rem;
+    }
+
+    .analyze-wrap.visible { display: block; }
+
+    .btn-analyze {
+      width: 100%;
+      padding: 18px;
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-analyze:hover { background: var(--orange-dim); transform: translateY(-1px); }
+    .btn-analyze:active { transform: translateY(0); }
+    .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── Loading ── */
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 3rem;
+      margin-bottom: 2rem;
+    }
+
+    .loading.visible { display: block; }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading p {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    .loading .loading-step {
+      font-size: 13px;
+      color: var(--orange);
+      margin-top: 6px;
+    }
+
+    /* ── Feedback ── */
+    .feedback-section {
+      display: none;
+    }
+
+    .feedback-section.visible { display: block; }
+
+    .feedback-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 1.5rem;
+    }
+
+    .feedback-header h2 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .feedback-badge {
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(74,200,120,0.12);
+      border: 1px solid rgba(74,200,120,0.3);
+      color: #4ac878;
+    }
+
+    .feedback-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-bottom: 1.5rem;
+    }
+
+    .feedback-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem;
+      transition: border-color 0.2s;
+    }
+
+    .feedback-card:hover { border-color: rgba(255,107,43,0.3); }
+
+    .card-icon {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--orange);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .card-content {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    .card-content ul {
+      padding-left: 16px;
+    }
+
+    .card-content li {
+      margin-bottom: 5px;
+    }
+
+    /* Overall tips card — full width */
+    .feedback-card.full-width {
+      grid-column: 1 / -1;
+      border-color: var(--border-orange);
+      background: linear-gradient(135deg, var(--surface) 0%, rgba(255,107,43,0.04) 100%);
+    }
+
+    .overall-rating {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .rating-score {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 48px;
+      font-weight: 800;
+      color: var(--orange);
+      line-height: 1;
+    }
+
+    .rating-label {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .rating-label strong {
+      display: block;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    /* ── Analyze again ── */
+    .btn-again {
+      width: 100%;
+      padding: 14px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 1rem;
+    }
+
+    .btn-again:hover { border-color: var(--orange); color: var(--orange); }
+
+    /* ── Error ── */
+    .error-box {
+      display: none;
+      background: rgba(220,50,50,0.08);
+      border: 1px solid rgba(220,50,50,0.3);
+      border-radius: 14px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+      color: #ff7070;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .error-box.visible { display: block; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      header { padding: 0 1rem; }
+      .hero { padding: 2.5rem 1rem 2rem; }
+      .feedback-cards { grid-template-columns: 1fr; }
+      .feedback-card.full-width { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">RL<span>Coach</span></div>
+    <div class="api-badge" id="api-badge" onclick="toggleApiSetup()">⚙ Set API Key</div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-tag">AI-Powered Coaching</div>
+    <h1>Level Up Your<br><em>Rocket League</em></h1>
+    <p class="hero-sub">Upload a clip of your gameplay and get instant, detailed coaching feedback powered by AI.</p>
+  </div>
+
+  <div class="main">
+
+    <!-- API Key Setup -->
+    <div class="api-setup" id="api-setup">
+      <h3>Gemini API Key Required</h3>
+      <p>
+        This app uses Google Gemini AI to analyze your gameplay video. Get a free API key at
+        <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>
+        — it's free and takes about 2 minutes. Paste it below.
+      </p>
+      <div class="api-row">
+        <input type="password" id="api-key-input" placeholder="Paste your Gemini API key here..." />
+        <button class="btn-save-key" onclick="saveApiKey()">Save Key</button>
+      </div>
+    </div>
+
+    <!-- Upload Zone -->
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" id="file-input" accept="video/*" onchange="handleFileSelect(event)" />
+      <div class="upload-icon">🎮</div>
+      <h3>Drop your gameplay clip here</h3>
+      <p>or click to browse your files</p>
+      <div class="file-types">
+        <span class="file-type-tag">MP4</span>
+        <span class="file-type-tag">MOV</span>
+        <span class="file-type-tag">AVI</span>
+        <span class="file-type-tag">MKV</span>
+        <span class="file-type-tag">WEBM</span>
+      </div>
+    </div>
+
+    <!-- Video Player -->
+    <div class="video-section" id="video-section">
+      <div class="video-header">
+        <h3>Your Clip</h3>
+        <button class="btn-change" onclick="resetUpload()">Change video</button>
+      </div>
+      <video id="video-player" controls></video>
+      <p class="video-filename" id="video-filename"></p>
+    </div>
+
+    <!-- Analyze Button -->
+    <div class="analyze-wrap" id="analyze-wrap">
+      <button class="btn-analyze" id="btn-analyze" onclick="analyzeVideo()">
+        Get Coaching Feedback
+      </button>
+    </div>
+
+    <!-- Error Box -->
+    <div class="error-box" id="error-box"></div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Analyzing your gameplay...</p>
+      <div class="loading-step" id="loading-step">Reading video frames</div>
+    </div>
+
+    <!-- Feedback -->
+    <div class="feedback-section" id="feedback-section">
+      <div class="feedback-header">
+        <h2>Coaching Report</h2>
+        <div class="feedback-badge">Analysis Complete</div>
+      </div>
+
+      <div class="feedback-cards" id="feedback-cards"></div>
+
+      <button class="btn-again" onclick="resetAll()">Analyze Another Clip</button>
+    </div>
+
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────────────────────
+    let selectedFile = null;
+    let apiKey = localStorage.getItem('rl_coach_api_key') || '';
+
+    const SECTIONS = [
+      { key: 'positioning',      icon: '📍', title: 'Positioning' },
+      { key: 'boost',            icon: '⚡', title: 'Boost Management' },
+      { key: 'mechanics',        icon: '🎯', title: 'Mechanics' },
+      { key: 'decision_making',  icon: '🧠', title: 'Decision Making' },
+      { key: 'rotation',         icon: '🔄', title: 'Rotation' },
+      { key: 'overall',          icon: '🏆', title: 'Overall Assessment' },
+    ];
+
+    // ── On load ────────────────────────────────────────────────────────────────
+    window.addEventListener('load', () => {
+      if (apiKey) updateApiBadge(true);
+    });
+
+    // ── API Key ────────────────────────────────────────────────────────────────
+    function toggleApiSetup() {
+      const setup = document.getElementById('api-setup');
+      setup.classList.toggle('visible');
+      if (setup.classList.contains('visible') && apiKey) {
+        document.getElementById('api-key-input').value = apiKey;
+      }
+    }
+
+    function saveApiKey() {
+      const val = document.getElementById('api-key-input').value.trim();
+      if (!val) return;
+      apiKey = val;
+      localStorage.setItem('rl_coach_api_key', val);
+      updateApiBadge(true);
+      document.getElementById('api-setup').classList.remove('visible');
+    }
+
+    function updateApiBadge(connected) {
+      const badge = document.getElementById('api-badge');
+      if (connected) {
+        badge.textContent = '✓ API Key Set';
+        badge.classList.add('connected');
+      } else {
+        badge.textContent = '⚙ Set API Key';
+        badge.classList.remove('connected');
+      }
+    }
+
+    // ── File handling ──────────────────────────────────────────────────────────
+    const uploadZone = document.getElementById('upload-zone');
+
+    uploadZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      uploadZone.classList.add('drag-over');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+      uploadZone.classList.remove('drag-over');
+    });
+
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('video/')) loadVideo(file);
+    });
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file) loadVideo(file);
+    }
+
+    function loadVideo(file) {
+      selectedFile = file;
+      const url = URL.createObjectURL(file);
+      document.getElementById('video-player').src = url;
+      document.getElementById('video-filename').textContent = file.name + ' · ' + (file.size / 1024 / 1024).toFixed(1) + ' MB';
+      document.getElementById('upload-zone').style.display = 'none';
+      document.getElementById('video-section').classList.add('visible');
+      document.getElementById('analyze-wrap').classList.add('visible');
+      hideError();
+    }
+
+    function resetUpload() {
+      selectedFile = null;
+      document.getElementById('video-player').src = '';
+      document.getElementById('file-input').value = '';
+      document.getElementById('upload-zone').style.display = '';
+      document.getElementById('video-section').classList.remove('visible');
+      document.getElementById('analyze-wrap').classList.remove('visible');
+      document.getElementById('feedback-section').classList.remove('visible');
+      hideError();
+    }
+
+    function resetAll() {
+      resetUpload();
+      document.getElementById('feedback-cards').innerHTML = '';
+    }
+
+    // ── Analysis ───────────────────────────────────────────────────────────────
+    async function analyzeVideo() {
+      if (!apiKey) {
+        document.getElementById('api-setup').classList.add('visible');
+        showError('Please set your Gemini API key first using the button above.');
+        return;
+      }
+
+      if (!selectedFile) {
+        showError('Please upload a video first.');
+        return;
+      }
+
+      // Show loading
+      document.getElementById('analyze-wrap').classList.remove('visible');
+      document.getElementById('feedback-section').classList.remove('visible');
+      document.getElementById('loading').classList.add('visible');
+      hideError();
+
+      const steps = [
+        'Reading video frames...',
+        'Analyzing positioning patterns...',
+        'Evaluating boost management...',
+        'Reviewing mechanics...',
+        'Compiling coaching report...'
+      ];
+      let stepIdx = 0;
+      const stepEl = document.getElementById('loading-step');
+      const stepInterval = setInterval(() => {
+        stepIdx = (stepIdx + 1) % steps.length;
+        stepEl.textContent = steps[stepIdx];
+      }, 2500);
+
+      try {
+        // Convert video to base64
+        const base64 = await fileToBase64(selectedFile);
+        const mimeType = selectedFile.type || 'video/mp4';
+
+        const prompt = `You are an expert Rocket League coach analyzing a gameplay video clip. 
+Watch this video carefully and provide detailed, specific, actionable coaching feedback.
+
+Respond ONLY with a valid JSON object in exactly this structure (no markdown, no extra text):
+{
+  "positioning": {
+    "score": 7,
+    "points": ["specific observation 1", "specific observation 2", "specific tip to improve"]
+  },
+  "boost": {
+    "score": 6,
+    "points": ["specific observation 1", "specific observation 2", "specific tip to improve"]
+  },
+  "mechanics": {
+    "score": 7,
+    "points": ["specific observation 1", "specific observation 2", "specific tip to improve"]
+  },
+  "decision_making": {
+    "score": 6,
+    "points": ["specific observation 1", "specific observation 2", "specific tip to improve"]
+  },
+  "rotation": {
+    "score": 7,
+    "points": ["specific observation 1", "specific observation 2", "specific tip to improve"]
+  },
+  "overall": {
+    "score": 7,
+    "rank_estimate": "Gold III / Plat I",
+    "summary": "2-3 sentence overall assessment of this player",
+    "top_priority": "The single most important thing this player should practice"
+  }
+}
+
+Scores are out of 10. Be specific about what you actually see in the video. Give practical, actionable advice.`;
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  {
+                    inline_data: {
+                      mime_type: mimeType,
+                      data: base64
+                    }
+                  },
+                  { text: prompt }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.4,
+                maxOutputTokens: 1500
+              }
+            })
+          }
+        );
+
+        clearInterval(stepInterval);
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error?.message || 'API request failed. Check your API key and try again.');
+        }
+
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        let feedback;
+        try {
+          const cleaned = rawText.replace(/```json|```/g, '').trim();
+          feedback = JSON.parse(cleaned);
+        } catch {
+          throw new Error('Could not parse AI response. Please try again.');
+        }
+
+        renderFeedback(feedback);
+
+      } catch (err) {
+        clearInterval(stepInterval);
+        document.getElementById('loading').classList.remove('visible');
+        document.getElementById('analyze-wrap').classList.add('visible');
+        showError('Error: ' + err.message);
+      }
+    }
+
+    // ── Render feedback ────────────────────────────────────────────────────────
+    function renderFeedback(data) {
+      document.getElementById('loading').classList.remove('visible');
+
+      const container = document.getElementById('feedback-cards');
+      container.innerHTML = '';
+
+      SECTIONS.forEach(section => {
+        const d = data[section.key];
+        if (!d) return;
+
+        const card = document.createElement('div');
+        card.className = 'feedback-card' + (section.key === 'overall' ? ' full-width' : '');
+
+        if (section.key === 'overall') {
+          card.innerHTML = `
+            <div class="card-icon">${section.icon}</div>
+            <div class="card-title">${section.title}</div>
+            <div class="overall-rating">
+              <div class="rating-score">${d.score}<span style="font-size:24px;color:var(--text-muted)">/10</span></div>
+              <div class="rating-label">
+                <strong>${d.rank_estimate || 'See below'}</strong>
+                Estimated rank
+              </div>
+            </div>
+            <div class="card-content">
+              <p style="margin-bottom:10px;">${d.summary || ''}</p>
+              ${d.top_priority ? `<p style="color:var(--orange);font-weight:600;">Top priority: ${d.top_priority}</p>` : ''}
+            </div>
+          `;
+        } else {
+          const points = (d.points || []).map(p => `<li>${p}</li>`).join('');
+          const score = d.score || '—';
+          const scoreColor = score >= 7 ? '#4ac878' : score >= 5 ? '#FAC775' : '#ff7070';
+          card.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="card-icon" style="margin:0">${section.icon}</span>
+                <div class="card-title" style="margin:0">${section.title}</div>
+              </div>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;color:${scoreColor}">${score}/10</div>
+            </div>
+            <div class="card-content"><ul>${points}</ul></div>
+          `;
+        }
+
+        container.appendChild(card);
+      });
+
+      document.getElementById('feedback-section').classList.add('visible');
+      document.getElementById('feedback-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-box');
+      el.textContent = msg;
+      el.classList.add('visible');
+    }
+
+    function hideError() {
+      document.getElementById('error-box').classList.remove('visible');
+    }
+  </script>
+</body>
+</html>
